@@ -5,11 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Camera, X, Upload } from "lucide-react"
 
-interface CameraCaptureProps {
-  onCapture: (file: File) => void
-}
 
-export function CameraCapture({ onCapture }: CameraCaptureProps) {
+
+export function CameraCapture() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isCameraActive, setIsCameraActive] = useState(false)
@@ -52,17 +50,41 @@ export function CameraCapture({ onCapture }: CameraCaptureProps) {
     }
   }
 
-  const uploadCapture = () => {
-    if (capturedImage) {
-      fetch(capturedImage)
-        .then((res) => res.blob())
-        .then((blob) => {
-          const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" })
-          onCapture(file)
-          setCapturedImage(null)
-        })
+  // const uploadCapture = () => {
+  //   if (capturedImage) {
+  //     fetch(capturedImage)
+  //       .then((res) => res.blob())
+  //       .then((blob) => {
+  //         const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" })
+  //         onCapture(file)
+  //         setCapturedImage(null)
+  //       })
+  //   }
+  // }
+  const uploadCapture = async () => {
+  if (capturedImage) {
+    try {
+      const blob = await fetch(capturedImage).then((res) => res.blob())
+      const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" })
+      
+      const formData = new FormData()
+      formData.append("files", file)
+
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) throw new Error("Upload failed")
+
+      setCapturedImage(null)
+      window.location.reload() // Refresh to show new document
+    } catch (error) {
+      console.error("Upload error:", error)
+      alert("Upload failed. Please try again.")
     }
   }
+}
 
   const retake = () => {
     setCapturedImage(null)
