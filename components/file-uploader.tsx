@@ -133,6 +133,110 @@
 //   )
 // }
 
+// "use client"
+
+// import { useState, useCallback } from "react"
+// import { useDropzone } from "react-dropzone"
+// import { Upload, File, X } from "lucide-react"
+// import { Button } from "@/components/ui/button"
+// import { Card } from "@/components/ui/card"
+// import { cn } from "@/lib/utils"
+// import { useRouter } from "next/navigation"
+
+// interface FileUploaderProps {
+//   onFilesAdded?: (files: File[]) => void
+// }
+
+// export function FileUploader({ onFilesAdded }: FileUploaderProps) {
+//   const router = useRouter()
+//   const [files, setFiles] = useState<File[]>([])
+//   const [isUploading, setIsUploading] = useState(false)
+
+//   const onDrop = useCallback((acceptedFiles: File[]) => {
+//     setFiles((prev) => [...prev, ...acceptedFiles])
+//   }, [])
+
+//   const { getRootProps, getInputProps, isDragActive } = useDropzone({
+//     onDrop,
+//     accept: {
+//       "application/pdf": [".pdf"],
+//       "image/*": [".jpg", ".jpeg", ".png", ".tiff", ".heic"],
+//     },
+//   })
+
+//   const handleUpload = async () => {
+//     if (files.length === 0) return
+
+//     setIsUploading(true)
+//     try {
+//       const formData = new FormData()
+//       files.forEach((file) => formData.append("files", file))
+
+//       const response = await fetch("/api/documents/upload", {
+//         method: "POST",
+//         body: formData,
+//       })
+
+//       if (!response.ok) throw new Error("Upload failed")
+
+//       setFiles([])
+//       router.refresh() // Refresh to show new documents
+//     } catch (error) {
+//       console.error("Upload error:", error)
+//       alert("Upload failed. Please try again.")
+//     } finally {
+//       setIsUploading(false)
+//     }
+//   }
+
+//   const removeFile = (index: number) => {
+//     setFiles((prev) => prev.filter((_, i) => i !== index))
+//   }
+
+//   return (
+//     <div className="space-y-4">
+//       <Card
+//         {...getRootProps()}
+//         className={cn(
+//           "border-2 border-dashed p-8 text-center cursor-pointer transition-colors",
+//           isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary"
+//         )}
+//       >
+//         <input {...getInputProps()} />
+//         <Upload size={32} className="mx-auto mb-2 text-muted-foreground" />
+//         <h3 className="font-semibold">Drag documents here or click to select</h3>
+//         <p className="text-sm text-muted-foreground mt-1">Supports PDF, JPG, PNG, TIFF (up to 100MB each)</p>
+//       </Card>
+
+//       {files.length > 0 && (
+//         <div className="space-y-2">
+//           <h4 className="font-semibold">Selected Files ({files.length})</h4>
+//           <div className="space-y-2">
+//             {files.map((file, index) => (
+//               <div key={`${file.name}-${index}`} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+//                 <div className="flex items-center gap-2">
+//                   <File size={18} className="text-muted-foreground" />
+//                   <div className="text-sm">
+//                     <p className="font-medium truncate">{file.name}</p>
+//                     <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+//                   </div>
+//                 </div>
+//                 <Button variant="ghost" size="sm" onClick={() => removeFile(index)}>
+//                   <X size={18} />
+//                 </Button>
+//               </div>
+//             ))}
+//           </div>
+
+//           <Button onClick={handleUpload} disabled={isUploading} className="w-full" size="lg">
+//             {isUploading ? "Uploading & Processing..." : `Upload ${files.length} File${files.length > 1 ? "s" : ""}`}
+//           </Button>
+//         </div>
+//       )}
+//     </div>
+//   )
+// }
+
 "use client"
 
 import { useState, useCallback } from "react"
@@ -142,12 +246,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
-interface FileUploaderProps {
-  onFilesAdded?: (files: File[]) => void
-}
-
-export function FileUploader({ onFilesAdded }: FileUploaderProps) {
+export function FileUploader() {
   const router = useRouter()
   const [files, setFiles] = useState<File[]>([])
   const [isUploading, setIsUploading] = useState(false)
@@ -162,12 +263,24 @@ export function FileUploader({ onFilesAdded }: FileUploaderProps) {
       "application/pdf": [".pdf"],
       "image/*": [".jpg", ".jpeg", ".png", ".tiff", ".heic"],
     },
+    maxSize: 100 * 1024 * 1024, // 100MB
+    onDropRejected: (rejections) => {
+      rejections.forEach((rejection) => {
+        if (rejection.file.size > 100 * 1024 * 1024) {
+          toast.error(`${rejection.file.name} is too large (max 100MB)`)
+        } else {
+          toast.error(`${rejection.file.name} is not a supported file type`)
+        }
+      })
+    },
   })
 
   const handleUpload = async () => {
     if (files.length === 0) return
 
     setIsUploading(true)
+    const toastId = toast.loading(`Uploading ${files.length} file${files.length > 1 ? "s" : ""}...`)
+
     try {
       const formData = new FormData()
       files.forEach((file) => formData.append("files", file))
@@ -177,13 +290,23 @@ export function FileUploader({ onFilesAdded }: FileUploaderProps) {
         body: formData,
       })
 
-      if (!response.ok) throw new Error("Upload failed")
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Upload failed")
+      }
 
+      const data = await response.json()
       setFiles([])
-      router.refresh() // Refresh to show new documents
+      
+      toast.success(
+        `Successfully uploaded ${data.count} document${data.count > 1 ? "s" : ""}! Processing started.`,
+        { id: toastId }
+      )
+      
+      router.refresh()
     } catch (error) {
       console.error("Upload error:", error)
-      alert("Upload failed. Please try again.")
+      toast.error(error instanceof Error ? error.message : "Upload failed", { id: toastId })
     } finally {
       setIsUploading(false)
     }
@@ -204,7 +327,9 @@ export function FileUploader({ onFilesAdded }: FileUploaderProps) {
       >
         <input {...getInputProps()} />
         <Upload size={32} className="mx-auto mb-2 text-muted-foreground" />
-        <h3 className="font-semibold">Drag documents here or click to select</h3>
+        <h3 className="font-semibold">
+          {isDragActive ? "Drop files here" : "Drag documents here or click to select"}
+        </h3>
         <p className="text-sm text-muted-foreground mt-1">Supports PDF, JPG, PNG, TIFF (up to 100MB each)</p>
       </Card>
 
@@ -214,9 +339,9 @@ export function FileUploader({ onFilesAdded }: FileUploaderProps) {
           <div className="space-y-2">
             {files.map((file, index) => (
               <div key={`${file.name}-${index}`} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-2">
-                  <File size={18} className="text-muted-foreground" />
-                  <div className="text-sm">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <File size={18} className="text-muted-foreground flex-shrink-0" />
+                  <div className="text-sm min-w-0 flex-1">
                     <p className="font-medium truncate">{file.name}</p>
                     <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                   </div>
@@ -229,7 +354,7 @@ export function FileUploader({ onFilesAdded }: FileUploaderProps) {
           </div>
 
           <Button onClick={handleUpload} disabled={isUploading} className="w-full" size="lg">
-            {isUploading ? "Uploading & Processing..." : `Upload ${files.length} File${files.length > 1 ? "s" : ""}`}
+            {isUploading ? "Uploading..." : `Upload ${files.length} File${files.length > 1 ? "s" : ""}`}
           </Button>
         </div>
       )}

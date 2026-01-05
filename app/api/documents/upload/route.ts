@@ -239,9 +239,76 @@
 //   }
 // }
 
+// import { NextRequest, NextResponse } from "next/server"
+// import { prisma } from "@/lib/db"
+// import { getUser } from "@/lib/auth"
+// import { put } from "@vercel/blob"
+// import { v4 as uuidv4 } from "uuid"
+
+// export const maxDuration = 60
+// export const dynamic = "force-dynamic"
+
+// export async function POST(req: NextRequest) {
+//   try {
+//     const user = await getUser()
+//     if (!user) {
+//       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+//     }
+
+//     const formData = await req.formData()
+//     const files = formData.getAll("files") as File[]
+
+//     if (!files || files.length === 0) {
+//       return NextResponse.json({ error: "No files provided" }, { status: 400 })
+//     }
+
+//     const documents = []
+
+//     for (const file of files) {
+//       // Validate file
+//       const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/tiff", "image/heic"]
+//       if (!allowedTypes.includes(file.type)) continue
+//       if (file.size > 100 * 1024 * 1024) continue // 100MB limit
+
+//       // Upload to blob storage
+//       const buffer = await file.arrayBuffer()
+//       const blobName = `${user.id}/${uuidv4()}/${file.name}`
+//       const blob = await put(blobName, buffer, {
+//         access: "public",
+//         contentType: file.type,
+//       })
+
+//       // Create document
+//       const document = await prisma.document.create({
+//         data: {
+//           title: file.name.replace(/\.[^/.]+$/, ""),
+//           fileName: file.name,
+//           fileUrl: blob.url,
+//           fileSize: file.size,
+//           fileType: file.type,
+//           ownerId: user.id,
+//           status: "PENDING",
+//         },
+//       })
+
+//       documents.push(document)
+
+//       // Trigger immediate processing (no queue for now - simpler)
+//       fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/documents/${document.id}/process`, {
+//         method: "POST",
+//       }).catch(console.error)
+//     }
+
+//     return NextResponse.json({ documents, count: documents.length }, { status: 201 })
+//   } catch (error) {
+//     console.error("Upload error:", error)
+//     return NextResponse.json({ error: "Upload failed" }, { status: 500 })
+//   }
+// }
+
 import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/db"
-import { getUser } from "@/lib/auth"
 import { put } from "@vercel/blob"
 import { v4 as uuidv4 } from "uuid"
 
@@ -250,9 +317,18 @@ export const dynamic = "force-dynamic"
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getUser()
-    if (!user) {
+    const { userId } = await auth()
+    
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { clerkId: userId },
+    })
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
     const formData = await req.formData()
@@ -263,16 +339,24 @@ export async function POST(req: NextRequest) {
     }
 
     const documents = []
+    const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/tiff", "image/heic"]
 
     for (const file of files) {
       // Validate file
-      const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/tiff", "image/heic"]
-      if (!allowedTypes.includes(file.type)) continue
-      if (file.size > 100 * 1024 * 1024) continue // 100MB limit
+      if (!allowedTypes.includes(file.type)) {
+        console.warn(`Skipping unsupported file type: ${file.type}`)
+        continue
+      }
+      
+      if (file.size > 100 * 1024 * 1024) {
+        console.warn(`Skipping file ${file.name}: exceeds 100MB limit`)
+        continue
+      }
 
       // Upload to blob storage
       const buffer = await file.arrayBuffer()
       const blobName = `${user.id}/${uuidv4()}/${file.name}`
+      
       const blob = await put(blobName, buffer, {
         access: "public",
         contentType: file.type,
@@ -293,15 +377,42 @@ export async function POST(req: NextRequest) {
 
       documents.push(document)
 
-      // Trigger immediate processing (no queue for now - simpler)
-      fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/documents/${document.id}/process`, {
+      // Trigger processing immediately (don't wait for response)
+      const origin = req.nextUrl.origin
+      fetch(`${origin}/api/documents/${document.id}/process`, {
         method: "POST",
-      }).catch(console.error)
+        headers: { "Content-Type": "application/json" },
+      }).catch((err) => {
+        console.error(`Failed to trigger processing for ${document.id}:`, err)
+      })
+
+      // Log upload
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          documentId: document.id,
+          action: "UPLOAD",
+          details: `Uploaded ${file.name}`,
+        },
+      })
     }
 
-    return NextResponse.json({ documents, count: documents.length }, { status: 201 })
+    return NextResponse.json(
+      {
+        documents,
+        count: documents.length,
+        message: `Successfully uploaded ${documents.length} document(s)`,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("Upload error:", error)
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Upload failed",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    )
   }
 }
