@@ -1,0 +1,405 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String   @id @default(cuid())
+  clerkId                String   @unique
+  email                  String   @unique
+  firstName              String?
+  lastName               String?
+  avatar                 String?
+  emailForwardingAddress String?  @unique // Add this line
+  plan                   Plan     @default(FREE)
+  credits                Int      @default(10)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  // Relations
+  documents     Document[]
+  folders       Folder[]
+  templates     Template[]
+  shares        Share[]
+  teamMembers   TeamMember[]
+  teams         Team[]
+  notifications Notification[]
+  apiKeys       ApiKey[]
+  auditLogs     AuditLog[]
+  subscriptions Subscription[]
+
+  @@index([clerkId])
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  members   TeamMember[]
+  documents Document[]
+  folders   Folder[]
+  shares    Share[]
+  apiKeys   ApiKey[]
+  auditLogs AuditLog[]
+  invites   TeamInvite[]
+
+  @@index([ownerId])
+}
+
+model TeamMember {
+  id       String   @id @default(cuid())
+  teamId   String
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     TeamRole @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model TeamInvite {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  email     String
+  role      TeamRole @default(MEMBER)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, email])
+  @@index([teamId])
+  @@index([token])
+}
+
+model Folder {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  teamId    String?
+  team      Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    Folder?  @relation("SubFolders", fields: [parentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  subFolders Folder[]   @relation("SubFolders")
+  documents  Document[]
+
+  @@index([ownerId])
+  @@index([teamId])
+  @@index([parentId])
+}
+
+model Document {
+  id           String         @id @default(cuid())
+  title        String
+  description  String?
+  fileUrl      String
+  fileName     String
+  fileSize     Int
+  fileType     String
+  status       DocumentStatus @default(PENDING)
+  documentType DocumentType   @default(GENERAL)
+  ownerId      String
+  owner        User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  teamId       String?
+  team         Team?          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  folderId     String?
+  folder       Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  // Processing
+  processedAt DateTime?
+  processedBy String?
+  confidence  Float?
+  pages       Int?
+  language    String?   @default("en")
+
+  // Relations
+  content         DocumentContent?
+  extractedText   ExtractedText?
+  tables          Table[]
+  fields          Field[]
+  classifications Classification?
+  shares          Share[]
+  versions        DocumentVersion[]
+  auditLogs       AuditLog[]
+  annotations     Annotation[]
+  comments        Comment[]
+
+  @@index([ownerId])
+  @@index([teamId])
+  @@index([folderId])
+  @@index([status])
+  @@index([documentType])
+}
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  ARCHIVED
+}
+
+enum DocumentType {
+  GENERAL
+  INVOICE
+  RECEIPT
+  FORM
+  CONTRACT
+  ID_DOCUMENT
+  MEDICAL
+  FINANCIAL
+  LEGAL
+}
+
+model DocumentContent {
+  id         String   @id @default(cuid())
+  documentId String   @unique
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  rawText    String   @db.Text
+  htmlText   String?  @db.Text
+  markdown   String?  @db.Text
+  updatedAt  DateTime @updatedAt
+
+  @@index([documentId])
+}
+
+model ExtractedText {
+  id         String   @id @default(cuid())
+  documentId String   @unique
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  text       String   @db.Text
+  confidence Float
+  language   String   @default("en")
+  updatedAt  DateTime @updatedAt
+
+  @@index([documentId])
+}
+
+model Table {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  pageNum    Int
+  title      String?
+  headers    String[] @db.Text
+  rows       Json[] // JSON array of objects
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
+}
+
+model Field {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  label      String
+  value      String   @db.Text
+  confidence Float
+  pageNum    Int?
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
+  @@index([label])
+}
+
+model Classification {
+  id            String    @id @default(cuid())
+  documentId    String    @unique
+  document      Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  type          String
+  subtype       String?
+  confidence    Float
+  isHumanReview Boolean   @default(false)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  @@index([documentId])
+}
+
+model Annotation {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String
+  text       String   @db.Text
+  pageNum    Int?
+  x          Float?
+  y          Float?
+  width      Float?
+  height     Float?
+  type       String   @default("highlight")
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String
+  text       String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([documentId])
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version    Int
+  content    String   @db.Text
+  createdBy  String
+  createdAt  DateTime @default(now())
+
+  @@unique([documentId, version])
+  @@index([documentId])
+}
+
+model Share {
+  id         String    @id @default(cuid())
+  documentId String
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId     String?
+  team       Team?     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  role       ShareRole @default(VIEWER)
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+  @@index([userId])
+}
+
+enum ShareRole {
+  VIEWER
+  EDITOR
+  OWNER
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  category    String
+  icon        String?
+  structure   Json
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([category])
+}
+
+model Subscription {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan               Plan
+  stripeId           String?   @unique
+  status             String    @default("active")
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  canceledAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([userId, plan])
+  @@index([userId])
+}
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId    String?
+  team      Team?     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  key       String    @unique
+  name      String
+  lastUsed  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([teamId])
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId     String?
+  team       Team?     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  action     String
+  details    Json?
+  changes    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([teamId])
+  @@index([documentId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String   @db.Text
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+}

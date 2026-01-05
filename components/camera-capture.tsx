@@ -1,0 +1,126 @@
+"use client"
+
+import { useRef, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Camera, X, Upload } from "lucide-react"
+
+interface CameraCaptureProps {
+  onCapture: (file: File) => void
+}
+
+export function CameraCapture({ onCapture }: CameraCaptureProps) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  const [capturedImage, setCapturedImage] = useState<string | null>(null)
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      })
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        setIsCameraActive(true)
+      }
+    } catch (error) {
+      console.error("Camera access denied:", error)
+      alert("Please allow camera access to use this feature")
+    }
+  }
+
+  const stopCamera = () => {
+    if (videoRef.current?.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks()
+      tracks.forEach((track) => track.stop())
+      setIsCameraActive(false)
+    }
+  }
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const context = canvasRef.current.getContext("2d")
+      if (context) {
+        context.drawImage(videoRef.current, 0, 0)
+        const imageUrl = canvasRef.current.toDataURL("image/jpeg")
+        setCapturedImage(imageUrl)
+        stopCamera()
+      }
+    }
+  }
+
+  const uploadCapture = () => {
+    if (capturedImage) {
+      fetch(capturedImage)
+        .then((res) => res.blob())
+        .then((blob) => {
+          const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" })
+          onCapture(file)
+          setCapturedImage(null)
+        })
+    }
+  }
+
+  const retake = () => {
+    setCapturedImage(null)
+    startCamera()
+  }
+
+  return (
+    <Card className="p-6">
+      <div className="space-y-4">
+        {!isCameraActive && !capturedImage && (
+          <Button onClick={startCamera} className="w-full" size="lg">
+            <Camera className="w-4 h-4 mr-2" />
+            Open Camera
+          </Button>
+        )}
+
+        {isCameraActive && (
+          <div className="space-y-4">
+            <div className="relative bg-black rounded-lg overflow-hidden">
+              <video ref={videoRef} autoPlay playsInline className="w-full aspect-video object-cover" />
+              <div className="absolute inset-0 border-4 border-yellow-400/50 rounded-lg pointer-events-none" />
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={capturePhoto} variant="default" className="flex-1">
+                Capture
+              </Button>
+              <Button onClick={stopCamera} variant="outline" size="icon">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {capturedImage && (
+          <div className="space-y-4">
+            <div className="relative bg-muted rounded-lg overflow-hidden">
+              <img
+                src={capturedImage || "/placeholder.svg"}
+                alt="Captured"
+                className="w-full aspect-video object-cover"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={uploadCapture} className="flex-1">
+                <Upload className="w-4 h-4 mr-2" />
+                Process
+              </Button>
+              <Button onClick={retake} variant="outline" className="flex-1 bg-transparent">
+                Retake
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <canvas ref={canvasRef} className="hidden" width={1280} height={720} />
+    </Card>
+  )
+}
