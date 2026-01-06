@@ -278,105 +278,153 @@
 //   )
 // }
 
-import { redirect } from "next/navigation"
-import { auth } from "@clerk/nextjs/server"
+// import { redirect } from "next/navigation"
+// import { auth } from "@clerk/nextjs/server"
+// import { getUser } from "@/lib/auth"
+// import { prisma } from "@/lib/db"
+// import { DocumentGrid } from "@/components/dashboard/document-grid"
+// import { DashboardHeader } from "@/components/dashboard/dashboard-header"
+// import { EmptyState } from "@/components/dashboard/empty-state"
+// import { StatsCards } from "@/components/dashboard/stats-cards"
+// import { FileUploader } from "@/components/file-uploader"
+// import { CameraCapture } from "@/components/camera-capture"
+// import { Card } from "@/components/ui/card"
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+// import type { Document } from "@prisma/client"
+
+// export const dynamic = "force-dynamic"
+
+// export default async function DashboardPage() {
+//   const { userId } = await auth()
+
+//   if (!userId) {
+//     redirect("/sign-in")
+//   }
+
+//   const user = await getUser()
+//   if (!user) {
+//     redirect("/sign-in")
+//   }
+
+//   const documents = await prisma.document.findMany({
+//     where: {
+//       ownerId: user.id,
+//     },
+//     orderBy: {
+//       createdAt: "desc",
+//     },
+//     take: 20,
+//     include: {
+//       owner: true,
+//     },
+//   })
+
+//   const stats = {
+//     totalDocuments: documents.length,
+//     processed: documents.filter((d: Document) => d.status === "COMPLETED").length,
+//     pending: documents.filter((d: Document) => d.status === "PENDING").length,
+//     credits: user.credits,
+//   }
+
+//   return (
+//     <div className="min-h-screen bg-background">
+//       <div className="space-y-8 p-6 md:p-8 animate-fadeInUp">
+//         <DashboardHeader user={user} />
+//         <StatsCards stats={stats} />
+
+//         {/* Upload Section */}
+//         <Card className="border border-border/40 rounded-xl p-8 bg-card/50 backdrop-blur-sm">
+//           <div className="space-y-6">
+//             <div>
+//               <h2 className="text-2xl font-semibold tracking-tight">Upload Documents</h2>
+//               <p className="text-sm text-muted-foreground mt-1">
+//                 Drag files, choose from files, or capture with camera. Processing starts automatically.
+//               </p>
+//             </div>
+
+//             <Tabs defaultValue="files" className="space-y-4 w-full">
+//               <TabsList className="bg-background border border-border/40 p-1 rounded-lg">
+//                 <TabsTrigger value="files" className="gap-2">
+//                   📁 Files
+//                 </TabsTrigger>
+//                 <TabsTrigger value="camera" className="gap-2">
+//                   📷 Camera
+//                 </TabsTrigger>
+//               </TabsList>
+
+//               <TabsContent value="files" className="space-y-4">
+//                 <FileUploader />
+//               </TabsContent>
+
+//               <TabsContent value="camera" className="space-y-4">
+//                 <CameraCapture />
+//               </TabsContent>
+//             </Tabs>
+//           </div>
+//         </Card>
+
+//         {/* Documents Section */}
+//         <div className="space-y-4">
+//           <div>
+//             <h2 className="text-2xl font-semibold tracking-tight">Recent Documents</h2>
+//             <p className="text-sm text-muted-foreground mt-1">
+//               {documents.length === 0
+//                 ? "Upload your first document to get started"
+//                 : `You have ${documents.length} document${documents.length === 1 ? "" : "s"}`}
+//             </p>
+//           </div>
+
+//           {documents.length === 0 ? <EmptyState /> : <DocumentGrid documents={documents} />}
+//         </div>
+//       </div>
+//     </div>
+//   )
+// }
+
 import { getUser } from "@/lib/auth"
-import { prisma } from "@/lib/db"
-import { DocumentGrid } from "@/components/dashboard/document-grid"
-import { DashboardHeader } from "@/components/dashboard/dashboard-header"
-import { EmptyState } from "@/components/dashboard/empty-state"
-import { StatsCards } from "@/components/dashboard/stats-cards"
-import { FileUploader } from "@/components/file-uploader"
-import { CameraCapture } from "@/components/camera-capture"
-import { Card } from "@/components/ui/card"
+import { PricingPlans } from "@/components/settings/pricing-plans"
+import { AccountSettings } from "@/components/settings/account-settings"
+import { IntegrationSettings } from "@/components/settings/integration-settings"
+import { SecuritySettings } from "@/components/settings/security-settings"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { Document } from "@prisma/client"
 
-export const dynamic = "force-dynamic"
-
-export default async function DashboardPage() {
-  const { userId } = await auth()
-
-  if (!userId) {
-    redirect("/sign-in")
-  }
-
+export default async function SettingsPage() {
   const user = await getUser()
   if (!user) {
-    redirect("/sign-in")
-  }
-
-  const documents = await prisma.document.findMany({
-    where: {
-      ownerId: user.id,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: 20,
-    include: {
-      owner: true,
-    },
-  })
-
-  const stats = {
-    totalDocuments: documents.length,
-    processed: documents.filter((d: Document) => d.status === "COMPLETED").length,
-    pending: documents.filter((d: Document) => d.status === "PENDING").length,
-    credits: user.credits,
+    return null
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="space-y-8 p-6 md:p-8 animate-fadeInUp">
-        <DashboardHeader user={user} />
-        <StatsCards stats={stats} />
-
-        {/* Upload Section */}
-        <Card className="border border-border/40 rounded-xl p-8 bg-card/50 backdrop-blur-sm">
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight">Upload Documents</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Drag files, choose from files, or capture with camera. Processing starts automatically.
-              </p>
-            </div>
-
-            <Tabs defaultValue="files" className="space-y-4 w-full">
-              <TabsList className="bg-background border border-border/40 p-1 rounded-lg">
-                <TabsTrigger value="files" className="gap-2">
-                  📁 Files
-                </TabsTrigger>
-                <TabsTrigger value="camera" className="gap-2">
-                  📷 Camera
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="files" className="space-y-4">
-                <FileUploader />
-              </TabsContent>
-
-              <TabsContent value="camera" className="space-y-4">
-                <CameraCapture />
-              </TabsContent>
-            </Tabs>
-          </div>
-        </Card>
-
-        {/* Documents Section */}
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Recent Documents</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {documents.length === 0
-                ? "Upload your first document to get started"
-                : `You have ${documents.length} document${documents.length === 1 ? "" : "s"}`}
-            </p>
-          </div>
-
-          {documents.length === 0 ? <EmptyState /> : <DocumentGrid documents={documents} />}
-        </div>
+    <div className="space-y-6 p-6 max-w-6xl animate-fadeInUp">
+      <div>
+        <h1 className="text-3xl font-bold">Settings</h1>
+        <p className="text-muted-foreground mt-1">Manage your account, billing, and integrations</p>
       </div>
+
+      <Tabs defaultValue="account" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="account">Account</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
+          <TabsTrigger value="billing">Billing</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="account">
+          <AccountSettings user={user} />
+        </TabsContent>
+
+        <TabsContent value="integrations">
+          <IntegrationSettings userId={user.id} />
+        </TabsContent>
+
+        <TabsContent value="security">
+          <SecuritySettings userId={user.id} />
+        </TabsContent>
+
+        <TabsContent value="billing">
+          <PricingPlans currentPlan={user.plan} currentCredits={user.credits} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

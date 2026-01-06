@@ -5,132 +5,180 @@ import type { Plan } from "@prisma/client"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Check } from "lucide-react"
-//
-const PLANS = [
+import { Loader2 } from "lucide-react"
+
+const CREDIT_PACKAGES = [
   {
-    id: "FREE",
-    name: "Free",
-    price: "$0",
-    billing: "Forever",
-    description: "Perfect for trying out",
-    features: ["10 documents/month", "Basic OCR", "Email support", "1 team member", "Basic export (PDF only)"],
+    id: "starter",
+    name: "Starter",
+    credits: 100,
+    price: 9.99,
+    description: "Perfect for getting started",
+    value: "Best for occasional use",
   },
   {
-    id: "STARTER",
-    name: "Starter",
-    price: "$29",
-    billing: "/month",
-    description: "For small teams",
-    features: [
-      "500 documents/month",
-      "Advanced OCR & AI",
-      "Priority support",
-      "Up to 5 team members",
-      "Export to Word & Excel",
-      "Document sharing",
-      "Analytics dashboard",
-    ],
+    id: "professional",
+    name: "Professional",
+    credits: 500,
+    price: 39.99,
+    description: "For regular users",
+    value: "Save 20%",
     popular: true,
   },
   {
-    id: "PROFESSIONAL",
-    name: "Professional",
-    price: "$99",
-    billing: "/month",
-    description: "For growing teams",
-    features: [
-      "Unlimited documents",
-      "Advanced OCR & AI",
-      "24/7 priority support",
-      "Unlimited team members",
-      "All export formats",
-      "Custom integrations",
-      "Advanced analytics",
-      "API access",
-      "Custom workflows",
-    ],
-  },
-  {
-    id: "ENTERPRISE",
+    id: "enterprise",
     name: "Enterprise",
-    price: "Custom",
-    billing: "Contact sales",
-    description: "For large organizations",
-    features: [
-      "Everything in Professional",
-      "Dedicated support",
-      "Custom integrations",
-      "On-premise deployment",
-      "SLA guarantee",
-      "Custom training",
-    ],
+    credits: 2000,
+    price: 129.99,
+    description: "For power users",
+    value: "Save 35%",
   },
+]
+
+const CREDIT_COSTS = [
+  { action: "Document Processing", cost: 1 },
+  { action: "PDF Export", cost: 1 },
+  { action: "Standard OCR", cost: 2 },
+  { action: "Premium OCR", cost: 5 },
 ]
 
 interface PricingPlansProps {
   currentPlan: Plan
+  currentCredits: number
 }
 
-export function PricingPlans({ currentPlan }: PricingPlansProps) {
+export function PricingPlans({ currentPlan, currentCredits }: PricingPlansProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedPackage, setSelectedPackage] = useState<string | null>(null)
 
-  const handleUpgrade = async (planId: string) => {
+  const handlePurchase = async (packageId: string) => {
     setIsLoading(true)
+    setSelectedPackage(packageId)
+
     try {
-      const response = await fetch("/api/subscriptions/checkout", {
+      const response = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ packageType: packageId }),
       })
 
-      if (!response.ok) throw new Error("Checkout failed")
+      if (!response.ok) {
+        throw new Error("Failed to create checkout")
+      }
 
-      const { url } = await response.json()
-      window.location.href = url
+      const { sessionUrl } = await response.json()
+      window.location.href = sessionUrl
+    } catch (error) {
+      console.error("[v0] Purchase error:", error)
+      alert("Failed to start checkout. Please try again.")
     } finally {
       setIsLoading(false)
+      setSelectedPackage(null)
     }
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {PLANS.map((plan) => (
-        <Card
-          key={plan.id}
-          className={`p-6 relative flex flex-col ${plan.popular ? "ring-2 ring-primary lg:scale-105" : ""}`}
-        >
-          {plan.popular && <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">Most Popular</Badge>}
-
-          <div className="mb-6">
-            <h3 className="font-semibold text-lg">{plan.name}</h3>
-            <p className="text-sm text-muted-foreground">{plan.description}</p>
+    <div className="space-y-8">
+      {/* Current Credits Display */}
+      <Card className="p-6 bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">Current Credits</p>
+            <p className="text-4xl font-bold">{currentCredits}</p>
           </div>
-
-          <div className="mb-6">
-            <p className="text-3xl font-bold">{plan.price}</p>
-            <p className="text-sm text-muted-foreground">{plan.billing}</p>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground mb-2">Current Plan</p>
+            <Badge variant="outline" className="text-base px-3 py-1">
+              {currentPlan}
+            </Badge>
           </div>
+        </div>
+      </Card>
 
-          <Button
-            onClick={() => handleUpgrade(plan.id)}
-            disabled={isLoading || currentPlan === plan.id}
-            variant={plan.popular ? "default" : "outline"}
-            className="w-full mb-6"
-          >
-            {currentPlan === plan.id ? "Current Plan" : "Upgrade"}
-          </Button>
-
-          <div className="space-y-3 flex-1">
-            {plan.features.map((feature) => (
-              <div key={feature} className="flex items-start gap-2 text-sm">
-                <Check size={16} className="text-green-500 mt-0.5 flex-shrink-0" />
-                <span>{feature}</span>
+      {/* Credit Costs Reference */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Credit Costs</h3>
+        <Card className="p-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {CREDIT_COSTS.map((item) => (
+              <div key={item.action} className="flex flex-col">
+                <span className="text-sm text-muted-foreground">{item.action}</span>
+                <span className="text-2xl font-bold text-primary">{item.cost}</span>
               </div>
             ))}
           </div>
         </Card>
-      ))}
+      </div>
+
+      {/* Credit Packages Grid */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Buy Credits</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {CREDIT_PACKAGES.map((pkg) => (
+            <Card
+              key={pkg.id}
+              className={`p-6 relative flex flex-col transition-all ${
+                pkg.popular ? "ring-2 ring-primary md:scale-105" : ""
+              }`}
+            >
+              {pkg.popular && <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">Most Popular</Badge>}
+
+              <div className="mb-4">
+                <h4 className="font-semibold text-lg">{pkg.name}</h4>
+                <p className="text-sm text-muted-foreground">{pkg.description}</p>
+              </div>
+
+              <div className="mb-6">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold">{pkg.credits}</span>
+                  <span className="text-muted-foreground">credits</span>
+                </div>
+                <p className="text-lg font-semibold mt-2">${pkg.price.toFixed(2)}</p>
+                <p className="text-xs text-green-600 font-medium mt-1">{pkg.value}</p>
+              </div>
+
+              <Button
+                onClick={() => handlePurchase(pkg.id)}
+                disabled={isLoading}
+                variant={pkg.popular ? "default" : "outline"}
+                className="w-full"
+              >
+                {isLoading && selectedPackage === pkg.id ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  "Buy Now"
+                )}
+              </Button>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* FAQ */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Frequently Asked Questions</h3>
+        <div className="space-y-4">
+          <Card className="p-4">
+            <p className="font-medium text-sm mb-2">Do credits expire?</p>
+            <p className="text-sm text-muted-foreground">No, credits never expire. Use them whenever you need them.</p>
+          </Card>
+          <Card className="p-4">
+            <p className="font-medium text-sm mb-2">Can I get a refund?</p>
+            <p className="text-sm text-muted-foreground">
+              Refunds are available within 30 days of purchase if credits haven't been used.
+            </p>
+          </Card>
+          <Card className="p-4">
+            <p className="font-medium text-sm mb-2">Need more credits?</p>
+            <p className="text-sm text-muted-foreground">
+              Contact our sales team for custom credit packages and enterprise pricing.
+            </p>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }

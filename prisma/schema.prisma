@@ -34,6 +34,7 @@ model User {
   apiKeys       ApiKey[]
   auditLogs     AuditLog[]
   subscriptions Subscription[]
+  creditTransactions CreditTransaction[]
 
   @@index([clerkId])
 }
@@ -160,6 +161,7 @@ model Document {
   auditLogs       AuditLog[]
   annotations     Annotation[]
   comments        Comment[]
+  creditTransactions CreditTransaction[]
 
   @@index([ownerId])
   @@index([teamId])
@@ -402,4 +404,21 @@ model Notification {
 
   @@index([userId])
   @@index([read])
+}
+
+
+model CreditTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  type      String   // "PURCHASE", "DOCUMENT_PROCESSING", "PDF_EXPORT", "OCR_STANDARD", "OCR_PREMIUM"
+  description String?
+  documentId String?
+  document  Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([documentId])
+  @@index([createdAt])
 }
