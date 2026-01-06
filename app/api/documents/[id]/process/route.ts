@@ -625,8 +625,9 @@ const anthropic = new Anthropic({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+ { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const startTime = Date.now()
 
   try {
@@ -649,7 +650,7 @@ export async function POST(
     }
 
     const document = await prisma.document.findUnique({
-      where: { id: params.id },
+     where: { id },
     })
 
     if (!document) {
@@ -661,7 +662,7 @@ export async function POST(
     }
 
     await prisma.document.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: "PROCESSING" },
     })
 
@@ -673,7 +674,7 @@ export async function POST(
       await prisma.auditLog.create({
         data: {
           userId: user.id,
-          documentId: params.id,
+          documentId: id,
           action: "PROCESS_START",
           details: `Started processing: ${document.fileName}`,
         },
@@ -846,7 +847,7 @@ ${extractedText.substring(0, 4000)}`,
 
     // Update document with classification results
     const updatedDocument = await prisma.document.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: "COMPLETED",
         processedAt: new Date(),
@@ -865,7 +866,7 @@ ${extractedText.substring(0, 4000)}`,
       await prisma.auditLog.create({
         data: {
           userId: user.id,
-          documentId: params.id,
+          documentId: id,
           action: "PROCESS_COMPLETE",
           details: `Processed as ${classificationData.type} (${processingTimeMs}ms, confidence: ${(classificationData.confidence * 100).toFixed(1)}%)`,
         },
@@ -899,7 +900,7 @@ ${extractedText.substring(0, 4000)}`,
       await prisma.auditLog.create({
         data: {
           userId: user.id,
-          documentId: params.id,
+          documentId: id,
           action: "PROCESS_FAILED",
           details: `Failed after ${processingTimeMs}ms: ${errorMessage}`,
         },
@@ -907,7 +908,7 @@ ${extractedText.substring(0, 4000)}`,
     }
 
     await prisma.document.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: "FAILED" },
     })
 
